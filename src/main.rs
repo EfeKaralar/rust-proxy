@@ -1,4 +1,6 @@
 use anyhow::Result;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::{error::Error, io};
 use tokio::io::AsyncWriteExt;
 use tokio::net::{TcpListener, TcpStream};
@@ -7,6 +9,7 @@ use tracing::{error, info, warn};
 struct ProxyConfig {
     listen_addr: String,
     backend_addr: String,
+    active_connections: Arc<AtomicUsize>,
 }
 
 #[tokio::main]
@@ -17,6 +20,7 @@ async fn main() -> Result<()> {
     let config = ProxyConfig {
         listen_addr: "127.0.0.1:8080".to_string(),
         backend_addr: "127.0.0.1:3000".to_string(),
+        active_connections: Arc::new(AtomicUsize::new(0)),
     };
 
     info!("Starting proxy server on {}", config.listen_addr);
@@ -31,11 +35,15 @@ async fn run_proxy(config: ProxyConfig) -> Result<()> {
     let listener = TcpListener::bind(&config.listen_addr).await?;
     info!("Proxy listening on {}", config.listen_addr);
 
+    let active = &config.active_connections.clone();
     loop {
         // When a TCP connection is requested, accept it
         match listener.accept().await {
             Ok((client_stream, client_addr)) => {
                 info!("New connection: {:?}", client_addr);
+                // Atomically increment active connections
+                active.fetch_add(1, Ordering::SeqCst);
+                info!("Active connections: {}", active.load(Ordering::SeqCst));
                 let backend_addr = config.backend_addr.clone();
 
                 // Spawn an async Tokio task to handle the connection
@@ -43,6 +51,9 @@ async fn run_proxy(config: ProxyConfig) -> Result<()> {
                 tokio::spawn(async move {
                     handle_connection(client_stream, client_addr.to_string(), backend_addr).await;
                 });
+                // Atomically decrement active connections
+                active.fetch_sub(1, Ordering::SeqCst);
+                info!("Active connections: {}", active.load(Ordering::SeqCst));
             }
             Err(e) => {
                 error!("Failed to accept connection: {}", e);
