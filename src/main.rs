@@ -4,12 +4,17 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::{error::Error, io};
 use tokio::io::AsyncWriteExt;
 use tokio::net::{TcpListener, TcpStream};
+use tokio::sync::Semaphore;
 use tracing::{error, info, warn};
 
 struct ProxyConfig {
     listen_addr: String,
     backend_addr: String,
+    // Use Atomic integers to store active connection count
+    // will use Ordering::SeqCst for strongest atomicty
     active_connections: Arc<AtomicUsize>,
+    // Use semaphore to limit max connection count
+    max_connections: Arc<Semaphore>,
 }
 
 #[tokio::main]
@@ -21,6 +26,7 @@ async fn main() -> Result<()> {
         listen_addr: "127.0.0.1:8080".to_string(),
         backend_addr: "127.0.0.1:3000".to_string(),
         active_connections: Arc::new(AtomicUsize::new(0)),
+        max_connections: Arc::new(Semaphore::new(1000)),
     };
 
     info!("Starting proxy server on {}", config.listen_addr);
@@ -40,6 +46,15 @@ async fn run_proxy(config: ProxyConfig) -> Result<()> {
         // When a TCP connection is requested, accept it
         match listener.accept().await {
             Ok((client_stream, client_addr)) => {
+                // Try to take 1 permit from the semaphore
+                // 1. If permit available (<max_connections), return immediately with a permit
+                // 2. Otherwise, wait until a permit is freed
+                let permit = config
+                    .max_connections
+                    .clone()
+                    .acquire_owned()
+                    .await
+                    .unwrap();
                 info!("New connection: {:?}", client_addr);
                 // Atomically increment active connections
                 active.fetch_add(1, Ordering::SeqCst);
@@ -49,6 +64,7 @@ async fn run_proxy(config: ProxyConfig) -> Result<()> {
                 // Spawn an async Tokio task to handle the connection
                 // Note the **async move** syntax - Alp
                 tokio::spawn(async move {
+                    let _permit = permit;
                     handle_connection(client_stream, client_addr.to_string(), backend_addr).await;
                 });
                 // Atomically decrement active connections
