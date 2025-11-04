@@ -1,6 +1,6 @@
 use anyhow::Result;
 use std::{error::Error, io};
-use tokio::io::{self, AsyncWriteExt};
+use tokio::io::AsyncWriteExt;
 use tokio::net::{TcpListener, TcpStream};
 use tracing::{error, info, warn};
 
@@ -16,7 +16,7 @@ async fn main() -> Result<()> {
 
     let config = ProxyConfig {
         listen_addr: "127.0.0.1:8080".to_string(),
-        backend_addr: "127.0.0.1:8080".to_string(),
+        backend_addr: "127.0.0.1:3000".to_string(),
     };
 
     info!("Starting proxy server on {}", config.listen_addr);
@@ -52,4 +52,25 @@ async fn run_proxy(config: ProxyConfig) -> Result<()> {
 }
 
 // Handle a single client connection
-async fn handle_connection(client_stream: TcpStream, client_addr: String, backend_addr: String) {}
+async fn handle_connection(
+    mut client_stream: TcpStream,
+    client_addr: String,
+    backend_addr: String,
+) -> Result<()> {
+    // Connect to backend server
+    let mut backend_stream = match TcpStream::connect(&backend_addr).await {
+        Ok(stream) => {
+            info!("Connected to backend {}", backend_addr);
+            stream
+        }
+        Err(e) => {
+            warn!("Failed to connect to backend {}: {}", backend_addr, e);
+            // Try to send the error message to client before closing
+            let _ = client_stream
+                .write_all(b"HTTP/1.1 502 Bad Gateway\r\n\rBackend unavailable")
+                .await;
+            return Err(e.into());
+        }
+    };
+    Ok(())
+}
