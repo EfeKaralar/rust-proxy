@@ -19,8 +19,11 @@ struct ProxyConfig {
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    // Initialize logging
+    println!("1. Program started");
+    // Enable console subscriber
+    // console_subscriber::init();
     tracing_subscriber::fmt::init();
+    println!("2. Subscriber started");
 
     let config = ProxyConfig {
         listen_addr: "127.0.0.1:8080".to_string(),
@@ -41,7 +44,7 @@ async fn run_proxy(config: ProxyConfig) -> Result<()> {
     let listener = TcpListener::bind(&config.listen_addr).await?;
     info!("Proxy listening on {}", config.listen_addr);
 
-    let active = &config.active_connections.clone();
+    let active = config.active_connections.clone();
     loop {
         // When a TCP connection is requested, accept it
         match listener.accept().await {
@@ -60,16 +63,16 @@ async fn run_proxy(config: ProxyConfig) -> Result<()> {
                 active.fetch_add(1, Ordering::SeqCst);
                 info!("Active connections: {}", active.load(Ordering::SeqCst));
                 let backend_addr = config.backend_addr.clone();
+                let active2 = active.clone();
 
                 // Spawn an async Tokio task to handle the connection
                 // Note the **async move** syntax - Alp
                 tokio::spawn(async move {
                     let _permit = permit;
                     handle_connection(client_stream, client_addr.to_string(), backend_addr).await;
+                    active2.fetch_sub(1, Ordering::SeqCst);
+                    info!("Active connections: {}", active2.load(Ordering::SeqCst));
                 });
-                // Atomically decrement active connections
-                active.fetch_sub(1, Ordering::SeqCst);
-                info!("Active connections: {}", active.load(Ordering::SeqCst));
             }
             Err(e) => {
                 error!("Failed to accept connection: {}", e);
@@ -81,7 +84,7 @@ async fn run_proxy(config: ProxyConfig) -> Result<()> {
 // Handle a single client connection
 async fn handle_connection(
     mut client_stream: TcpStream,
-    client_addr: String,
+    _client_addr: String,
     backend_addr: String,
 ) -> Result<()> {
     // Connect to backend server
