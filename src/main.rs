@@ -72,5 +72,26 @@ async fn handle_connection(
             return Err(e.into());
         }
     };
+
+    // Split streams into read and writes
+    let (mut client_read, mut client_write) = client_stream.split();
+    let (mut backend_read, mut backend_write) = backend_stream.split();
+
+    // Copy data bidirectionally and simultaniuosly
+    let client_to_backend = tokio::io::copy(&mut client_read, &mut backend_write);
+    let backend_to_client = tokio::io::copy(&mut backend_read, &mut client_write);
+    // Wait on the success of both or failure of 1 of the tasks
+    match tokio::try_join!(client_to_backend, backend_to_client) {
+        Ok((client_bytes, backend_bytes)) => {
+            info!(
+                "Connection Closed.\tClient->Backend: {}bytes\tBackend->Client: {}bytes",
+                client_bytes, backend_bytes
+            );
+        }
+        Err(e) => {
+            warn!("Connection error: {}", e);
+        }
+    }
+
     Ok(())
 }
