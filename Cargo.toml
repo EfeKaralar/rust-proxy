@@ -5,7 +5,9 @@ edition = "2024"
 
 [dependencies]
 anyhow = "1.0.100"
+bytes = "1.10.1"
 console-subscriber = "0.5.0"
+httparse = "1.10.1"
 tokio = {version="1.40", features = ["full"]}
 tracing = "0.1.41"
 tracing-subscriber = "0.3.20"
