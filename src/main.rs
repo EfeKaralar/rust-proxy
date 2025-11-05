@@ -19,11 +19,9 @@ struct ProxyConfig {
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    println!("1. Program started");
     // Enable console subscriber
-    // console_subscriber::init();
-    tracing_subscriber::fmt::init();
-    println!("2. Subscriber started");
+    console_subscriber::init();
+    // tracing_subscriber::fmt::init();
 
     let config = ProxyConfig {
         listen_addr: "127.0.0.1:8080".to_string(),
