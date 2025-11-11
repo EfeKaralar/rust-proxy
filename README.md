@@ -32,6 +32,7 @@ Connection: close\r\n
 \r\n
 Hello, World!
 `
+<<<<<<< HEAD
 ---
 The rest of the document is for design purposes, it is not fully implemented yet.
 # Architecture & Technical Achievements
@@ -88,3 +89,28 @@ The rest of the document is for design purposes, it is not fully implemented yet
 - Lock-free concurrent data structures
 - Performance profiling and optimization
 - Production systems design (health checks, circuit breakers, backpressure)
+=======
+- Browser establishes a TCP connection to proxy.
+- Browser sends the HTTP request (with an absolute-URI) to proxy.
+- Proxy establishes a TCP connection to yahoo.com (using the absolute-URI).
+- Proxy forwards the HTTP request.
+- Proxy receives the response.
+- Proxy closes the connection to yahoo.com.
+- Proxy forwards the response to browser.
+- Proxy signals to close the connection (using FIN).
+- Connection between browser and Proxy is closes
+
+## RFC 9112
+
+    A message can be either a request from client to server or a response from server to client. Syntactically, the two types of messages differ only in the start-line, which is either a request-line (for requests) or a status-line (for responses), and in the algorithm for determining the length of the message body (Section 6).
+
+    In practice, servers are implemented to only expect a request (a response is interpreted as an unknown or invalid request method), and clients are implemented to only expect a response.
+
+    Intermediaries that process HTTP messages (i.e., all intermediaries other than those acting as tunnels) MUST send their own HTTP-version in forwarded messages, unless it is purposefully downgraded as a workaround for an upstream issue. In other words, an intermediary is not allowed to blindly forward the start-line without ensuring that the protocol version in that message matches a version to which that intermediary is conformant for both the receiving and sending of messages. Forwarding an HTTP message without rewriting the HTTP-version might result in communication errors when downstream recipients use the message sender's version to determine what features are safe to use for later communication with that sender.
+
+### Request Line
+A request-line begins with a method token, followed by a single space (SP), the request-target, and another single space (SP), and ends with the protocol version.
+
+  request-line   = method SP request-target SP HTTP-version
+
+>>>>>>> 6db038a (Implement HTTPRequest parse and to_bytes method)
